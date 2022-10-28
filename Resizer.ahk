@@ -1,8 +1,8 @@
 #IfWinNotActive ahk_exe Wow.exe
 !c:: MoveWindowAndResize()
-!+c:: MoveWindowAndResize(,0.3, 0.9, true)
+!+c:: MoveWindowAndResize(,0.3, 0.9, true, true)
 ;!t:: MonitorTest() Debugging function
-;!t:: ProcessTest()
+;!t:: ProcessTest() Debugging Function
 
 ProcessTest(WinTitle:="A") {
 	WinGetTitle, title, %WinTitle%
@@ -21,7 +21,7 @@ MonitorTest() {
 	MsgBox, Monitor:%monitor% `nLeft: %monCoordsLeft% -- Top: %monCoordsTop% -- Right: %monCoordsRight% -- Bottom %monCoordsBottom% `nHeight: %height% -- Width: %width%.
 }
 
-MoveWindowAndResize(WinTitle:="A", ResizeWidthScale:=0.7, ResizeHeightScale:=0.9, Override=false) {
+MoveWindowAndResize(WinTitle:="A", ResizeWidthScale:=0.7, ResizeHeightScale:=0.9, Override:=false, SideSnap:=false) {
 	WinGet, maxed, MinMax, %WinTitle%
 	if (maxed = 1) { ; if window is maximized, unmaximize before applying effects
 		WinRestore, %WinTitle%
@@ -41,6 +41,7 @@ MoveWindowAndResize(WinTitle:="A", ResizeWidthScale:=0.7, ResizeHeightScale:=0.9
 	FileBrowser := ["explorer.exe", "Explorer.EXE", "WindowsTerminal.exe"] ; 60% W 65% H, not overridable
 	FileBrowserUWP := ["- Files"]
 	SplitView := ["ApplicationFrameHost.exe"] ; 50% W 85% H, overridable
+	SplitViewUWP := ["Microsoft To Do"] 
 
 	; App specific behavior
 	if (InArray(FileBrowser, activeProcess) OR ContainsInArray(activeTitle, FileBrowserUWP)) {
@@ -52,7 +53,7 @@ MoveWindowAndResize(WinTitle:="A", ResizeWidthScale:=0.7, ResizeHeightScale:=0.9
 			BoundarySnap(WinTitle, targetMonitor, unbounded[0], unbounded[1])
 		}
 		Resize(WinTitle, ResizeWidthScale, ResizeHeightScale, targetMonitor)
-	} else if (InArray(SplitView, activeProcess) AND !Override) {
+	} else if ((InArray(SplitView, activeProcess) OR ContainsInArray(activeTitle, SplitViewUWP)) AND !Override) {
 		ResizeWidthScale := .5
 		ResizeHeightScale := .85
 
@@ -68,7 +69,7 @@ MoveWindowAndResize(WinTitle:="A", ResizeWidthScale:=0.7, ResizeHeightScale:=0.9
 		if (unbounded[0] != 0 OR unbounded[1] != 0) { ; window out of bounds
 			BoundarySnap(WinTitle, targetMonitor, unbounded[0], unbounded[1])
 		} else { ; window in bounds
-			Reposition(WinTitle, targetMonitor)
+			Reposition(WinTitle, targetMonitor, SideSnap)	
 		}
 	}
 }
@@ -291,13 +292,33 @@ BoundarySnap(WinTitle, monitor, Horizontal, Vertical) {
 }
 
 /*
-Moves window to a prescribed position. Current functionality centers the window on the display.
+Moves window to a prescribed position.
 */
-Reposition(WinTitle, monitor) {
+Reposition(WinTitle, monitor, SideSnap) {
 	WinGetPos, actX, actY, actWidth, actHeight, %WinTitle%
 	Sysget, monCoords, MonitorWorkArea, %monitor%
 
-	WinMove, %WinTitle%,, ((monCoordsRight+monCoordsLeft)/2) - (actWidth/2), ((monCoordsBottom+monCoordsTop)/2) - (actHeight/2)
+	if (SideSnap) { ; Snap the window to the closest side
+		global marginsCalculated
+		if (!marginsCalculated) {
+			MsgBox, "Error: margins not calculated! Call CalcualateMargins() first!"
+		}
+
+		; Determine which side the window is mostly on
+		leftWidth := ((monCoordsRight + monCoordsLeft) / 2) - actX
+		rightWidth :=  (actX + actWidth) - ((monCoordsRight + monCoordsLeft) / 2)
+		if (leftWidth > rightWidth) {
+			global marginLeft
+			WinMove, %WinTitle%,, marginLeft, ((monCoordsBottom+monCoordsTop)/2) - (actHeight/2)
+		} else {
+			global marginRight
+			WinMove, %WinTitle%,, marginRight - actWidth, ((monCoordsBottom+monCoordsTop)/2) - (actHeight/2)
+		}
+	} else { ; Center the window on the display
+		WinMove, %WinTitle%,, ((monCoordsRight+monCoordsLeft)/2) - (actWidth/2), ((monCoordsBottom+monCoordsTop)/2) - (actHeight/2)
+	}
+
+	
 }
 
 /*
